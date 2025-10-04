@@ -1,8 +1,8 @@
-import org.apache.spark.sql.{SparkSession, DataFrame}
+import org.apache.spark.sql.SparkSession
 import java.util.Properties
 import org.apache.spark.sql.functions._
 
-object ReadWriteInPostgresql {
+object Transformation {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder()
       .appName("DataFrame")
@@ -18,8 +18,8 @@ object ReadWriteInPostgresql {
     connectionProperties.put("password", "mahek")
     connectionProperties.put("driver", "org.postgresql.Driver")
 
-    writetoPostgre(spark, jdbcURL, connectionProperties)
     readfromPostgre(spark, jdbcURL, connectionProperties)
+    performTransformation(spark, jdbcURL, connectionProperties)
 
     System.in.read()
     spark.stop()
@@ -30,26 +30,25 @@ object ReadWriteInPostgresql {
     val employeedf = spark.read
       .jdbc(jdbcURL, "employees", properties)
     employeedf.show()
-    employeedf.printSchema()
   }
 
-  def writetoPostgre(spark:SparkSession, jdbcURL:String, properties: Properties) : Unit = {
+  def performTransformation (spark: SparkSession, jdbcURL:String, properties: Properties) : Unit = {
     import spark.implicits._
-    val newEmployees = Seq(
-      (2, "Tom", "Marketing", 4800, "2025-08-15"),
-      (3, "Bob", "Sales", 5200, "2025-09-01"),
-      (4, "Jame", "Human Resources", 4700, "2025-07-20"),
-      (5, "Nile", "Sales", 6100, "2025-06-10"),
-      (6, "Alice", "Operations", 5300, "2025-10-05"),
-      (7, "Jacob", "Human Resources", 5800, "2025-11-12"),
-      (8, "Tim", "Marketing", 4900, "2025-08-25"),
-      (9, "Tiya", "Sales", 6000, "2025-12-01"),
-      (10, "John", "Operations", 5100, "2025-09-18")
-    ).toDF("id", "name", "department", "salary", "hire_date")
-      .withColumn("hire_date", to_date($"hire_date", "yyyy-MM-dd"))
-
-    newEmployees.write
-      .mode("append")
+    val employeeDF = spark.read
       .jdbc(jdbcURL, "employees", properties)
+
+    val categoriseSalary = employeeDF
+      .withColumn("Salary_Category",
+        when($"salary" > 6000, "High")
+          .when($"salary" > 5000, "Medium")
+          .otherwise("Low"))
+    println("Employees with Salary Category")
+    categoriseSalary.show()
+    categoriseSalary.write
+      .mode("overwrite")
+      .jdbc(jdbcURL, "salary_category", properties)
+    println("salary_category data successfully loaded")
   }
+
 }
+
